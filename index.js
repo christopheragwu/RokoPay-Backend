@@ -10,7 +10,7 @@ const app = express();
 // ✅ Configure allowed origins
 const allowedOrigins = [
   "http://localhost:5173",              // frontend in dev
-  "https://your-production-domain.com"  // replace with prod frontend
+  "https://rokopay.xyz"  // replace with prod frontend
 ];
 
 app.use(
