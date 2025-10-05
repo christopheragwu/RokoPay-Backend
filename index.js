@@ -9,8 +9,8 @@ const app = express();
 
 // ✅ Allowed frontend domains
 const allowedOrigins = [
-  "http://localhost:5173",     // Local dev
-  "https://rokopay.xyz"        // Your live frontend on cPanel
+  "http://localhost:5173",
+  "https://rokopay.xyz",
 ];
 
 // ✅ CORS config
@@ -25,23 +25,20 @@ const corsOptions = {
   credentials: true,
 };
 
-// 🧠 IMPORTANT: CORS must be first
+// ✅ This handles everything already (no need for app.options)
 app.use(cors(corsOptions));
 
-// ✅ FIX: Preflight (OPTIONS) handler — new format
-app.options("/*", cors(corsOptions));
-
-// 🔐 Helmet for security headers
+// 🔐 Helmet for headers
 app.use(helmet());
 
-// 🍪 Cookie parser
+// 🍪 Cookies
 app.use(cookieParser());
 
-// 📦 Body parsers
+// 🧠 Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔌 Connect to MongoDB
+// 🔌 MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
@@ -51,15 +48,14 @@ mongoose
     console.error("❌ MongoDB error:", err);
   });
 
-// 🛣️ Routes
+// 📦 Routes
 app.use("/api/auth", authRouter);
 
-// 🏠 Default route
 app.get("/", (req, res) => {
   res.json({ message: "Hello from the server" });
 });
 
-// 🚀 Start the server
+// 🚀 Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Listening on port ${PORT}...`);
