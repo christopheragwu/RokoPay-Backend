@@ -106,7 +106,7 @@ exports.signin = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // ✅ Validate request body
+    // ✅ Validate input
     const { error } = signinSchema.validate({ email, password });
     if (error) {
       return res
@@ -114,7 +114,7 @@ exports.signin = async (req, res) => {
         .json({ success: false, message: error.details[0].message });
     }
 
-    // ✅ Look up user
+    // ✅ Find user
     const existingUser = await User.findOne({ email }).select("+password");
     if (!existingUser) {
       return res
@@ -133,7 +133,7 @@ exports.signin = async (req, res) => {
         .json({ success: false, message: "Invalid credentials" });
     }
 
-    // ✅ Check if user verified
+    // ✅ Check email verification
     if (!existingUser.verified) {
       return res.status(403).json({
         success: false,
@@ -141,7 +141,7 @@ exports.signin = async (req, res) => {
       });
     }
 
-    // ✅ Create JWT
+    // ✅ Create JWT (longer lifespan for persistent login)
     const token = jwt.sign(
       {
         userId: existingUser._id,
@@ -149,10 +149,10 @@ exports.signin = async (req, res) => {
         verified: existingUser.verified,
       },
       process.env.TOKEN_SECRET,
-      { expiresIn: "8h" }
+      { expiresIn: "7d" } // 🔁 7 days token validity
     );
 
-    // ✅ Build safe user object (no password)
+    // ✅ Remove sensitive info
     const user = {
       id: existingUser._id,
       firstName: existingUser.firstName,
@@ -164,17 +164,18 @@ exports.signin = async (req, res) => {
       verified: existingUser.verified,
     };
 
-    // ✅ Send cookie + response
+    // ✅ Set secure cookie (without "Bearer")
     res
-      .cookie("Authorization", "Bearer " + token, {
-        expires: new Date(Date.now() + 8 * 3600000), // 8h
+      .cookie("Authorization", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 1000 * 60 * 60 * 24 * 7, // ⏳ 7 days
       })
       .json({
         success: true,
         token,
-        user, // 👈 full user details for frontend Zustand
+        user,
         message: "Logged in successfully",
       });
   } catch (error) {
@@ -185,7 +186,9 @@ exports.signin = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const token = req.cookies.Authorization?.split(" ")[1];
+    // ✅ FIX: Don't split — cookie already contains just the token
+    const token = req.cookies.Authorization;
+
     if (!token) {
       return res
         .status(401)
@@ -204,7 +207,7 @@ exports.getMe = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    res.json({ success: true, user });
+    res.status(200).json({ success: true, user });
   } catch (error) {
     console.error("GetMe error:", error);
     res
@@ -214,54 +217,107 @@ exports.getMe = async (req, res) => {
 };
 
 exports.signout = async (req, res) => {
-  res
-    .clearCookie("Authorization", {
+  try {
+    // Check if the cookie exists first (optional but safe)
+    const token = req.cookies.Authorization;
+
+    if (!token) {
+      return res.status(200).json({
+        success: true,
+        message: "No active session found. Already logged out.",
+      });
+    }
+
+    // ✅ Clear the cookie
+    res.clearCookie("Authorization", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    })
-    .status(200)
-    .json({ success: true, message: "Logged out successfully." });
+      secure: process.env.NODE_ENV === "production", // only HTTPS in production
+      sameSite: "strict", // or 'lax' if needed for cross-site
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully.",
+    });
+  } catch (error) {
+    console.error("Signout error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Logout failed. Please try again.",
+    });
+  }
 };
 
 exports.sendVerificationCode = async (req, res) => {
   const { email } = req.body;
 
   try {
+    // 1. Check if user exists
     const existingUser = await User.findOne({ email });
 
     if (!existingUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User does not exists!" });
-    }
-    if (existingUser.verified) {
-      return res
-        .status(400)
-        .json({ success: false, message: "You are already verified" });
+      return res.status(404).json({
+        success: false,
+        message: "User does not exist!",
+      });
     }
 
-    const codeValue = Math.floor(Math.random() * 1000000).toString();
-    let info = await transport.sendMail({
-      from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+    // 2. Check if already verified
+    if (existingUser.verified) {
+      return res.status(400).json({
+        success: false,
+        message: "You are already verified.",
+      });
+    }
+
+    // 3. Generate verification code
+    const codeValue = Math.floor(100000 + Math.random() * 900000).toString(); // Always 6-digit
+
+    // 4. Send email using SendGrid
+    const info = await transport.sendMail({
+      from: '"RokoPay" <no-reply@rokopay.xyz>', // ✅ Use your authenticated domain
       to: existingUser.email,
-      subject: "RokoPay Account Verification Code",
-      html: "<h1>" + codeValue + "</h1>",
+      subject: "RokoPay Verification Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>Welcome to RokoPay 👋</h2>
+          <p>Your account verification code is:</p>
+          <h1 style="background: #f0f0f0; display: inline-block; padding: 10px 20px; border-radius: 8px;">
+            ${codeValue}
+          </h1>
+          <p>This code will expire shortly. Do not share it with anyone.</p>
+        </div>
+      `,
     });
 
-    if (info.accepted[0] === existingUser.email) {
-      const hashedCodeValue = hmacProcess(
+    // 5. Confirm delivery
+    if (info.accepted.includes(existingUser.email)) {
+      const hashedCode = hmacProcess(
         codeValue,
         process.env.HMAC_VERIFICATION_CODE_SECRET
       );
-      existingUser.verificationCode = hashedCodeValue;
+
+      existingUser.verificationCode = hashedCode;
       existingUser.verificationCodeValidation = Date.now();
       await existingUser.save();
-      return res.status(200).json({ success: true, message: "Code sent!" });
+
+      return res.status(200).json({
+        success: true,
+        message: "Verification code sent!",
+      });
     }
-    res.status(400).json({ success: false, message: "code sent failed" });
+
+    // 6. Email not accepted
+    return res.status(400).json({
+      success: false,
+      message: "Failed to send verification code. Please try again.",
+    });
   } catch (error) {
-    console.log(error);
+    console.error("❌ Error sending verification email:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while sending verification code.",
+    });
   }
 };
 
@@ -388,12 +444,34 @@ exports.sendForgotPasswordCode = async (req, res) => {
         .json({ success: false, message: "User does not exists!" });
     }
 
-    const codeValue = Math.floor(Math.random() * 1000000).toString();
+    const codeValue = Math.floor(Math.random() * 1000000)
+      .toString()
+      .padStart(6, "0");
+
     let info = await transport.sendMail({
       from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
       to: existingUser.email,
       subject: "RokoPay Forgot Password Code",
-      html: "<h1>" + codeValue + "</h1>",
+      html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9f9f9; border-radius: 8px;">
+              <h2 style="color: #e63946;">RokoPay Password Reset</h2>
+              <p>Hello,</p>
+              <p>You requested to reset your password. Use the code below to proceed:</p>
+          
+              <div style="font-size: 24px; font-weight: bold; color: #333; background: #ffffff; padding: 10px 20px; border-radius: 6px; display: inline-block; margin: 20px 0;">
+                ${codeValue}
+              </div>
+
+            <p>This code is valid for 5 minutes.</p>
+            <p>If you didn't request a password reset, please ignore this email.</p>
+
+            <hr style="margin: 30px 0;" />
+
+            <p style="font-size: 12px; color: #777;">
+            Need help? Contact our support team at <a href="mailto:support@rokopay.xyz">support@rokopay.xyz</a>.
+            </p>
+          </div>
+        `,
     });
 
     if (info.accepted[0] === existingUser.email) {
