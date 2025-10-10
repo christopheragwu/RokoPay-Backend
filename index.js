@@ -11,7 +11,9 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "https://rokopay.xyz",
+  "https://www.rokopay.xyz"  // ✅ in case Cloudflare adds www
 ];
+
 
 // ✅ CORS config
 const corsOptions = {

@@ -6,7 +6,6 @@ const router = express.Router();
 // Auth flows
 router.post("/signup", authController.signup);
 router.post("/signin", authController.signin);
-router.get("/me", authController.getMe);
 router.post("/signout", identifier, authController.signout);
 
 // Email verification

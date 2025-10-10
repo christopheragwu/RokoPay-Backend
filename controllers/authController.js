@@ -185,38 +185,6 @@ exports.signin = async (req, res) => {
   }
 };
 
-exports.getMe = async (req, res) => {
-  try {
-    // ✅ FIX: Don't split — cookie already contains just the token
-    const token = req.cookies.Authorization;
-
-    if (!token) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Not authorized" });
-    }
-
-    const decoded = jwt.verify(token, process.env.TOKEN_SECRET);
-
-    const user = await User.findById(decoded.userId).select(
-      "firstName lastName email phoneNumber gender dateOfBirth verified"
-    );
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    res.status(200).json({ success: true, user });
-  } catch (error) {
-    console.error("GetMe error:", error);
-    res
-      .status(401)
-      .json({ success: false, message: "Invalid or expired token" });
-  }
-};
-
 exports.signout = async (req, res) => {
   try {
     // Check if the cookie exists first (optional but safe)
