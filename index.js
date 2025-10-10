@@ -25,7 +25,6 @@ const corsOptions = {
   credentials: true,
 };
 
-// ✅ This handles everything already (no need for app.options)
 app.use(cors(corsOptions));
 
 // 🔐 Helmet for headers

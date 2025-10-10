@@ -168,10 +168,11 @@ exports.signin = async (req, res) => {
     res
       .cookie("Authorization", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 1000 * 60 * 60 * 24 * 7, // ⏳ 7 days
+        secure: true, // ✅ Always true in production (HTTPS is required)
+        sameSite: "none", // ✅ Needed for frontend & backend on different domains
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       })
+
       .json({
         success: true,
         token,
