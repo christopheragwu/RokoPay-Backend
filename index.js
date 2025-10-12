@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -11,9 +13,8 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "https://rokopay.xyz",
-  "https://www.rokopay.xyz"  // ✅ in case Cloudflare adds www
+  "https://www.rokopay.xyz", // ✅ in case Cloudflare adds www
 ];
-
 
 // ✅ CORS config
 const corsOptions = {
@@ -28,36 +29,26 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// 🔐 Helmet for headers
 app.use(helmet());
-
-// 🍪 Cookies
 app.use(cookieParser());
-
-// 🧠 Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔌 MongoDB
+// ✅ Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("✅ Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.error("❌ MongoDB error:", err);
-  });
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// 📦 Routes
+// ✅ Routes
 app.use("/api/auth", authRouter);
 
 app.get("/", (req, res) => {
-  res.json({ message: "Hello from the server" });
+  res.json({ message: "RokoPay API is running 🚀" });
 });
 
 // 🚀 Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Listening on port ${PORT}...`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

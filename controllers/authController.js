@@ -531,3 +531,76 @@ exports.verifyForgotPasswordCode = async (req, res) => {
     console.log(error);
   }
 };
+
+/**
+ * Sync Firebase-authenticated user with MongoDB
+ * @route POST /api/users/sync
+ */
+exports.syncFirebaseUser = async (req, res) => {
+  try {
+    const {
+      uid,
+      firstName,
+      lastName,
+      gender,
+      dateOfBirth,
+      phoneNumber,
+      email,
+    } = req.body;
+
+    if (!uid || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing Firebase UID or email.",
+      });
+    }
+
+    // 🔒 Optional — in production, verify token from Firebase
+    // (add middleware later to decode and verify idToken)
+
+    // ✅ Check if user already exists in MongoDB
+    let user = await User.findOne({ uid });
+    if (user) {
+      // ✅ Update if any profile fields changed
+      user.firstName = firstName;
+      user.lastName = lastName;
+      user.gender = gender;
+      user.dateOfBirth = dateOfBirth;
+      user.phoneNumber = phoneNumber;
+      user.email = email;
+      await user.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "User already exists and has been updated.",
+        user,
+      });
+    }
+
+    // ✅ Create new record
+    user = await User.create({
+      uid,
+      firstName,
+      lastName,
+      gender,
+      dateOfBirth,
+      phoneNumber,
+      email,
+      verified: true, // Firebase users are verified separately
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "User synced successfully with MongoDB.",
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Firebase user sync error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to sync Firebase user.",
+    });
+  }
+};
+
+
